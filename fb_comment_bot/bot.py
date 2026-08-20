@@ -1,4 +1,4 @@
-"""Оркестрация: AdsPower → Playwright CDP → обход задач из tasks.json."""
+"""Оркестрация: Undetectable → Playwright CDP → обход задач из tasks.json."""
 
 from __future__ import annotations
 
@@ -8,27 +8,27 @@ from pathlib import Path
 from loguru import logger
 from playwright.async_api import Browser, Page, async_playwright
 
-from fb_comment_bot.adspower_client import AdsPowerClient
 from fb_comment_bot.config import DEFAULT_COMMENTS_FILE, DEFAULT_TASKS_FILE
 from fb_comment_bot.facebook_actions import CommentAborted, FacebookActions
 from fb_comment_bot.human_behavior import human_pause
 from fb_comment_bot.io_utils import load_comments, load_tasks
+from fb_comment_bot.undetectable_client import UndetectableClient
 
 
 class FacebookCommentBot:
-    """Бот автокомментирования для одного AdsPower-профиля."""
+    """Бот автокомментирования для одного Undetectable-профиля."""
 
     def __init__(
         self,
         profile_id: str,
         tasks_file: Path = DEFAULT_TASKS_FILE,
         comments_file: Path = DEFAULT_COMMENTS_FILE,
-        adspower: AdsPowerClient | None = None,
+        undetectable: UndetectableClient | None = None,
     ) -> None:
         self.profile_id = profile_id
         self.tasks_file = Path(tasks_file)
         self.comments_file = Path(comments_file)
-        self._adspower = adspower or AdsPowerClient()
+        self._undetectable = undetectable or UndetectableClient()
 
     async def run(self) -> None:
         """Запускает профиль, выполняет все задачи и корректно гасит браузер."""
@@ -38,7 +38,7 @@ class FacebookCommentBot:
             logger.warning("Список задач пуст — нечего комментировать")
             return
 
-        ws_url = await self._adspower.start_profile(self.profile_id)
+        ws_url = await self._undetectable.start_profile(self.profile_id)
         try:
             async with async_playwright() as playwright:
                 logger.info("Подключение Playwright по CDP: {}", ws_url)
@@ -61,13 +61,13 @@ class FacebookCommentBot:
                     if index < len(urls):
                         await human_pause(4.0, 8.0)
         finally:
-            # Браузер закрываем через AdsPower API, а не browser.close().
-            await self._adspower.stop_profile(self.profile_id)
+            # Браузер закрываем через Undetectable API, а не browser.close().
+            await self._undetectable.stop_profile(self.profile_id)
             logger.info("Работа завершена")
 
     @staticmethod
     async def _pick_page(browser: Browser) -> Page:
-        """Берёт уже открытую вкладку профиля AdsPower или создаёт новую."""
+        """Берёт уже открытую вкладку профиля Undetectable или создаёт новую."""
         if not browser.contexts:
             raise RuntimeError("У CDP-браузера нет контекстов — профиль запущен некорректно")
         context = browser.contexts[0]

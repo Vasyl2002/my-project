@@ -1,4 +1,4 @@
-"""Асинхронный бот автокомментирования Facebook через AdsPower + Playwright."""
+"""Асинхронный бот автокомментирования Facebook через Undetectable + Playwright."""
 
 __all__ = ["FacebookCommentBot"]
 

@@ -1,12 +1,37 @@
 """Константы и настройки бота."""
 
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
-# --- AdsPower Local API ---
-ADSPOWER_BASE_URL = "http://local.adspower.net:50325"
-ADSPOWER_START_PATH = "/api/v1/user/start"
-ADSPOWER_STOP_PATH = "/api/v1/user/stop"
-ADSPOWER_TIMEOUT_SEC = 60.0
+# --- Undetectable Local API ---
+# Порт задаётся в настройках Undetectable (API address). Заводской — 25325;
+# здесь по умолчанию 1984, как часто выставляют вручную. Переопределение:
+#   UNDETECTABLE_BASE_URL=http://127.0.0.1:25325
+#   UNDETECTABLE_HOST / UNDETECTABLE_PORT
+UNDETECTABLE_HOST = os.getenv("UNDETECTABLE_HOST", "127.0.0.1")
+UNDETECTABLE_PORT = os.getenv("UNDETECTABLE_PORT", "1984")
+UNDETECTABLE_BASE_URL = os.getenv(
+    "UNDETECTABLE_BASE_URL",
+    f"http://{UNDETECTABLE_HOST}:{UNDETECTABLE_PORT}",
+).rstrip("/")
+UNDETECTABLE_TIMEOUT_SEC = float(os.getenv("UNDETECTABLE_TIMEOUT", "60"))
+
+# Официальный Local API v1.5: GET /profile/start/{id} и GET /profile/stop/{id}.
+# Альтернативные пути (если в сборке другой префикс) — через env.
+UNDETECTABLE_START_PATH = os.getenv("UNDETECTABLE_START_PATH", "/profile/start")
+UNDETECTABLE_STOP_PATH = os.getenv("UNDETECTABLE_STOP_PATH", "/profile/stop")
+
+
+def build_undetectable_base_url(*, api_url: str | None = None, api_port: int | str | None = None) -> str:
+    """Собирает базовый URL Local API из CLI/env."""
+    if api_url:
+        return api_url.rstrip("/")
+    if api_port is not None:
+        return f"http://{UNDETECTABLE_HOST}:{api_port}"
+    return UNDETECTABLE_BASE_URL
+
 
 # --- Пути по умолчанию ---
 ROOT_DIR = Path(__file__).resolve().parent.parent

@@ -1,4 +1,4 @@
-"""Проверки загрузки tasks.json / comments.txt без AdsPower и браузера."""
+"""Проверки загрузки tasks.json / comments.txt без Undetectable и браузера."""
 
 from __future__ import annotations
 

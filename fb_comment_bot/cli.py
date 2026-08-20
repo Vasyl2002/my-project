@@ -14,13 +14,24 @@ from fb_comment_bot.logger import setup_logger
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Автокомментирование постов Facebook через AdsPower Local API и Playwright.",
+        description="Автокомментирование постов Facebook через Undetectable Local API и Playwright.",
     )
     parser.add_argument(
         "--profile-id",
         "-p",
         required=True,
-        help="AdsPower user_id профиля, уже залогиненного в Facebook",
+        help="ID профиля Undetectable, уже залогиненного в Facebook",
+    )
+    parser.add_argument(
+        "--api-url",
+        default=None,
+        help="Базовый URL Local API, например http://127.0.0.1:1984",
+    )
+    parser.add_argument(
+        "--api-port",
+        type=int,
+        default=None,
+        help="Порт Local API Undetectable (перебивает UNDETECTABLE_PORT)",
     )
     parser.add_argument(
         "--tasks",
@@ -42,12 +53,17 @@ async def async_main() -> None:
     args = parse_args()
     # Playwright тянется только при реальном запуске, не на --help.
     from fb_comment_bot.bot import FacebookCommentBot
+    from fb_comment_bot.config import build_undetectable_base_url
+    from fb_comment_bot.undetectable_client import UndetectableClient
 
     logger.info("Старт бота для профиля {}", args.profile_id)
+    base_url = build_undetectable_base_url(api_url=args.api_url, api_port=args.api_port)
+    logger.info("Undetectable Local API: {}", base_url)
     bot = FacebookCommentBot(
         profile_id=args.profile_id,
         tasks_file=args.tasks,
         comments_file=args.comments,
+        undetectable=UndetectableClient(base_url=base_url),
     )
     await bot.run()
 

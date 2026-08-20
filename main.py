@@ -1,4 +1,4 @@
-"""Точка входа: python main.py --profile-id <AdsPower user_id>."""
+"""Точка входа: python main.py --profile-id <Undetectable profile id>."""
 
 from fb_comment_bot.cli import main
 
