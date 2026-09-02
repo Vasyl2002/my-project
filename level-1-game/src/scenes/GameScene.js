@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
 
 /**
- * Hidden-object item list.
- * Coordinates are in background-image pixels. Click the scene background
- * (Dev Mode) and paste { x, y } here after you drop in the real assets.
+ * Coordinates are in background-image pixels.
+ * Click the background (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
-  { key: 'banana', file: 'banana.png', x: 210, y: 250 },
-  { key: 'mouse', file: 'mouse.png', x: 620, y: 390 },
-  { key: 'glasses', file: 'glasses.png', x: 980, y: 175 },
-  { key: 'apple', file: 'apple.png', x: 340, y: 480 },
-  { key: 'usb', file: 'usb.png', x: 860, y: 455 },
-  { key: 'pencil', file: 'pencil.png', x: 1090, y: 310 },
+  { key: 'banana', x: 200, y: 200 },
+  { key: 'mouse', x: 400, y: 200 },
+  { key: 'glasses', x: 600, y: 200 },
+  { key: 'apple', x: 800, y: 200 },
+  { key: 'usb', x: 1000, y: 200 },
+  { key: 'pencil', x: 300, y: 400 },
 ];
 
 const PANEL_HEIGHT = 110;
@@ -24,10 +23,12 @@ export default class GameScene extends Phaser.Scene {
 
   preload() {
     this.load.image('bg', 'assets/bg.jpg');
-
-    for (const item of ITEMS) {
-      this.load.image(item.key, `assets/${item.file}`);
-    }
+    this.load.image('banana', 'assets/banana.png');
+    this.load.image('mouse', 'assets/mouse.png');
+    this.load.image('glasses', 'assets/glasses.png');
+    this.load.image('apple', 'assets/apple.png');
+    this.load.image('usb', 'assets/usb.png');
+    this.load.image('pencil', 'assets/pencil.png');
   }
 
   create() {
@@ -56,11 +57,22 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.createHud(width, height);
-    this.spawnItems();
+
+    for (const item of ITEMS) {
+      const sprite = this.add.image(item.x, item.y, item.key);
+      sprite.setDepth(10);
+      sprite.setData('itemKey', item.key);
+      sprite.setInteractive({ useHandCursor: true });
+
+      sprite.on('pointerdown', () => {
+        this.collectItem(sprite);
+      });
+    }
   }
 
   createHud(width, height) {
     const panelY = height - PANEL_HEIGHT / 2;
+
     const panel = this.add.rectangle(
       width / 2,
       panelY,
@@ -70,7 +82,6 @@ export default class GameScene extends Phaser.Scene {
       0.96,
     );
     panel.setDepth(1000);
-    panel.setStrokeStyle(2, 0xd9d0c3);
 
     const slotCount = ITEMS.length;
     const slotGap = 88;
@@ -81,17 +92,13 @@ export default class GameScene extends Phaser.Scene {
       const x = startX + index * slotGap;
       const y = panelY;
 
-      const slot = this.add.circle(x, y, 34, 0xffffff, 1);
-      slot.setStrokeStyle(2, 0xcfc4b5);
-      slot.setDepth(1001);
-
       const icon = this.add.image(x, y, item.key);
-      fitSprite(icon, HUD_ICON_SIZE);
+      const scale = Math.min(HUD_ICON_SIZE / icon.width, HUD_ICON_SIZE / icon.height);
+      icon.setScale(scale);
       icon.setDepth(1002);
-      icon.setAlpha(0.38);
-      icon.setTint(0x7a7a7a);
+      icon.setAlpha(0.4);
 
-      this.hudSlots[item.key] = { slot, icon, x, y };
+      this.hudSlots[item.key] = { icon, x, y, hudScale: scale };
     });
 
     this.counterText = this.add
@@ -103,19 +110,6 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setDepth(1002);
-  }
-
-  spawnItems() {
-    for (const item of ITEMS) {
-      const sprite = this.add.image(item.x, item.y, item.key);
-      sprite.setDepth(10);
-      sprite.setData('itemKey', item.key);
-      sprite.setInteractive({ useHandCursor: true, pixelPerfect: false });
-
-      sprite.on('pointerdown', () => {
-        this.collectItem(sprite);
-      });
-    }
   }
 
   collectItem(sprite) {
@@ -134,61 +128,15 @@ export default class GameScene extends Phaser.Scene {
       targets: sprite,
       x: target.x,
       y: target.y,
-      scale: getHudScale(sprite),
+      scale: target.hudScale,
       duration: 650,
       ease: 'Cubic.easeInOut',
       onComplete: () => {
         sprite.destroy();
-        this.markHudFound(key);
+        target.icon.setAlpha(1);
         this.foundCount += 1;
         this.counterText.setText(`${this.foundCount}/${this.totalCount}`);
-
-        if (this.foundCount >= this.totalCount) {
-          this.showWinMessage();
-        }
       },
     });
   }
-
-  markHudFound(key) {
-    const { icon, slot } = this.hudSlots[key];
-    icon.clearTint();
-    icon.setAlpha(1);
-    slot.setFillStyle(0xe5f6d8);
-    slot.setStrokeStyle(2, 0x7cb86a);
-  }
-
-  showWinMessage() {
-    const { width, height } = this.scale;
-
-    const overlay = this.add.rectangle(
-      width / 2,
-      height / 2,
-      width,
-      height,
-      0x000000,
-      0.45,
-    );
-    overlay.setDepth(2000);
-
-    this.add
-      .text(width / 2, height / 2, 'You found everything!', {
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '48px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-        align: 'center',
-      })
-      .setOrigin(0.5)
-      .setDepth(2001);
-  }
-}
-
-function fitSprite(sprite, maxSize) {
-  const scale = Math.min(maxSize / sprite.width, maxSize / sprite.height);
-  sprite.setScale(scale);
-}
-
-function getHudScale(sprite) {
-  return Math.min(HUD_ICON_SIZE / sprite.width, HUD_ICON_SIZE / sprite.height);
 }
