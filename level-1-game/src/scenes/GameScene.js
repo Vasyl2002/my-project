@@ -5,17 +5,16 @@ import Phaser from 'phaser';
  * Click the background (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
-  { key: 'banana', x: 400, y: 400 },
-  { key: 'mouse', x: 700, y: 500 },
-  { key: 'glasses', x: 1100, y: 320 },
-  { key: 'apple', x: 500, y: 700 },
-  { key: 'usb', x: 1400, y: 620 },
-  { key: 'pencil', x: 1600, y: 450 },
+  { key: 'banana', x: 582, y: 229, size: 78, angle: -32 },
+  { key: 'mouse', x: 1198, y: 179, size: 70, angle: 10 },
+  { key: 'glasses', x: 1747, y: 536, size: 92, angle: -24 },
+  { key: 'apple', x: 1169, y: 676, size: 62, angle: 16 },
+  { key: 'usb', x: 1523, y: 876, size: 48, angle: 8 },
+  { key: 'pencil', x: 457, y: 734, size: 88, angle: 58 },
 ];
 
 const PANEL_HEIGHT = 110;
 const HUD_ICON_SIZE = 56;
-const SCENE_ITEM_SIZE = 120;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -61,7 +60,8 @@ export default class GameScene extends Phaser.Scene {
 
     for (const item of ITEMS) {
       const sprite = this.add.image(item.x, item.y, item.key);
-      sprite.setScale(fitScale(sprite, SCENE_ITEM_SIZE));
+      sprite.setScale(fitScale(sprite, item.size));
+      sprite.setAngle(item.angle);
       sprite.setDepth(10);
       sprite.setData('itemKey', item.key);
       sprite.setInteractive({ useHandCursor: true });
@@ -152,6 +152,7 @@ export default class GameScene extends Phaser.Scene {
       x: target.x,
       y: target.y,
       scale: target.hudScale,
+      angle: 0,
       duration: 650,
       ease: 'Cubic.easeInOut',
       onComplete: () => {
