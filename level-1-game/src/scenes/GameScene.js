@@ -51,10 +51,10 @@ export default class GameScene extends Phaser.Scene {
       Phaser.Geom.Rectangle.Contains,
     );
     bg.on('pointerdown', (pointer) => {
-      console.log({
-        x: Math.round(pointer.worldX),
-        y: Math.round(pointer.worldY),
-      });
+      this.showClickCoords(
+        Math.round(pointer.worldX),
+        Math.round(pointer.worldY),
+      );
     });
 
     this.createHud(width, height);
@@ -112,6 +112,27 @@ export default class GameScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setDepth(1002);
+  }
+
+  showClickCoords(x, y) {
+    const coords = { x, y };
+    console.log(coords);
+
+    const label = this.add
+      .text(x, y, `{ x: ${x}, y: ${y} }`, {
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(3000);
+
+    this.time.delayedCall(1000, () => {
+      label.destroy();
+    });
   }
 
   collectItem(sprite) {
