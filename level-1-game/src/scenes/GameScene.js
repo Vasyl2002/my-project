@@ -5,12 +5,12 @@ import Phaser from 'phaser';
  * Click the background (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
-  { key: 'banana', x: 582, y: 229, size: 78, angle: -32 },
-  { key: 'mouse', x: 1198, y: 179, size: 70, angle: 10 },
-  { key: 'glasses', x: 1747, y: 536, size: 92, angle: -24 },
-  { key: 'apple', x: 1169, y: 676, size: 62, angle: 16 },
-  { key: 'usb', x: 1523, y: 876, size: 48, angle: 8 },
-  { key: 'pencil', x: 457, y: 734, size: 88, angle: 58 },
+  { key: 'banana', x: 582, y: 229, size: 68, angle: -18 },
+  { key: 'mouse', x: 1198, y: 179, size: 76, angle: 6 },
+  { key: 'glasses', x: 1747, y: 536, size: 100, angle: -38 },
+  { key: 'apple', x: 1169, y: 676, size: 54, angle: 12 },
+  { key: 'usb', x: 1523, y: 876, size: 42, angle: -22 },
+  { key: 'pencil', x: 457, y: 734, size: 64, angle: 78 },
 ];
 
 const PANEL_HEIGHT = 110;
