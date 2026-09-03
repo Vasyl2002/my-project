@@ -15,6 +15,7 @@ const ITEMS = [
 
 const PANEL_HEIGHT = 110;
 const HUD_ICON_SIZE = 56;
+const SCENE_ITEM_SIZE = 120;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -60,6 +61,7 @@ export default class GameScene extends Phaser.Scene {
 
     for (const item of ITEMS) {
       const sprite = this.add.image(item.x, item.y, item.key);
+      sprite.setScale(fitScale(sprite, SCENE_ITEM_SIZE));
       sprite.setDepth(10);
       sprite.setData('itemKey', item.key);
       sprite.setInteractive({ useHandCursor: true });
@@ -93,7 +95,7 @@ export default class GameScene extends Phaser.Scene {
       const y = panelY;
 
       const icon = this.add.image(x, y, item.key);
-      const scale = Math.min(HUD_ICON_SIZE / icon.width, HUD_ICON_SIZE / icon.height);
+      const scale = fitScale(icon, HUD_ICON_SIZE);
       icon.setScale(scale);
       icon.setDepth(1002);
       icon.setAlpha(0.4);
@@ -139,4 +141,8 @@ export default class GameScene extends Phaser.Scene {
       },
     });
   }
+}
+
+function fitScale(sprite, maxSize) {
+  return Math.min(maxSize / sprite.width, maxSize / sprite.height);
 }
