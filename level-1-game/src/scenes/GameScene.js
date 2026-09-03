@@ -1,16 +1,16 @@
 import Phaser from 'phaser';
 
 /**
- * Coordinates are in background-image pixels.
+ * Coordinates are in game pixels (1920x1080).
  * Click the background (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
-  { key: 'banana', x: 200, y: 200 },
-  { key: 'mouse', x: 400, y: 200 },
-  { key: 'glasses', x: 600, y: 200 },
-  { key: 'apple', x: 800, y: 200 },
-  { key: 'usb', x: 1000, y: 200 },
-  { key: 'pencil', x: 300, y: 400 },
+  { key: 'banana', x: 400, y: 400 },
+  { key: 'mouse', x: 700, y: 500 },
+  { key: 'glasses', x: 1100, y: 320 },
+  { key: 'apple', x: 500, y: 700 },
+  { key: 'usb', x: 1400, y: 620 },
+  { key: 'pencil', x: 1600, y: 450 },
 ];
 
 const PANEL_HEIGHT = 110;
@@ -22,6 +22,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.setBaseURL(import.meta.env.BASE_URL);
     this.load.image('bg', 'assets/bg.jpg');
     this.load.image('banana', 'assets/banana.png');
     this.load.image('mouse', 'assets/mouse.png');
@@ -36,19 +37,15 @@ export default class GameScene extends Phaser.Scene {
     this.totalCount = ITEMS.length;
     this.hudSlots = {};
 
-    const bgSource = this.textures.get('bg').getSourceImage();
-    const width = bgSource.width;
-    const height = bgSource.height;
+    const width = this.cameras.main.width;
+    const height = this.cameras.main.height;
 
-    if (width !== this.scale.width || height !== this.scale.height) {
-      this.scale.setGameSize(width, height);
-    }
-
-    this.cameras.main.setBounds(0, 0, width, height);
-    this.cameras.main.centerOn(width / 2, height / 2);
-
-    const bg = this.add.image(width / 2, height / 2, 'bg');
-    bg.setInteractive({ useHandCursor: false });
+    const bg = this.add.image(0, 0, 'bg').setOrigin(0, 0);
+    bg.setDisplaySize(width, height);
+    bg.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, width, height),
+      Phaser.Geom.Rectangle.Contains,
+    );
     bg.on('pointerdown', (pointer) => {
       console.log({
         x: Math.round(pointer.worldX),
