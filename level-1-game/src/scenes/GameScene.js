@@ -22,14 +22,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.setBaseURL(import.meta.env.BASE_URL);
-    this.load.image('bg', 'assets/bg.jpg');
-    this.load.image('banana', 'assets/banana.png');
-    this.load.image('mouse', 'assets/mouse.png');
-    this.load.image('glasses', 'assets/glasses.png');
-    this.load.image('apple', 'assets/apple.png');
-    this.load.image('usb', 'assets/usb.png');
-    this.load.image('pencil', 'assets/pencil.png');
+    this.load.on('loaderror', (fileObj) => {
+      console.error('Phaser не нашел файл:', fileObj.key, 'по пути:', fileObj.src);
+    });
+
+    this.load.image('bg', '/assets/bg.jpg');
+    this.load.image('banana', '/assets/banana.png');
+    this.load.image('mouse', '/assets/mouse.png');
+    this.load.image('glasses', '/assets/glasses.png');
+    this.load.image('apple', '/assets/apple.png');
+    this.load.image('usb', '/assets/usb.png');
+    this.load.image('pencil', '/assets/pencil.png');
   }
 
   create() {
