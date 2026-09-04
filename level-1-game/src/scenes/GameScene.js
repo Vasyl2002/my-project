@@ -9,8 +9,8 @@ const ITEMS = [
   { key: 'mouse', x: 1198, y: 179, size: 76, angle: 6 },
   { key: 'glasses', x: 1747, y: 536, size: 100, angle: -38 },
   { key: 'apple', x: 1169, y: 676, size: 54, angle: 12 },
-  { key: 'usb', x: 1523, y: 860, size: 118, angle: -12 },
-  { key: 'pencil', x: 538, y: 768, size: 150, angle: 102 },
+  { key: 'usb', x: 1610, y: 890, size: 150, angle: 12 },
+  { key: 'pencil', x: 790, y: 748, size: 230, angle: 22 },
 ];
 
 const PANEL_HEIGHT = 110;
