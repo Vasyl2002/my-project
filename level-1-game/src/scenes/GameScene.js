@@ -16,7 +16,7 @@ const ITEMS = [
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
 const PANEL_HEIGHT = 200;
-const HUD_ICON_SIZE = 148;
+const HUD_ICON_SIZE = 168;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -109,12 +109,15 @@ export default class GameScene extends Phaser.Scene {
       panelY,
       width,
       PANEL_HEIGHT,
-      0xf4efe6,
+      0xe7d7c2,
       1,
     );
     panel.setDepth(1000);
-    panel.setStrokeStyle(3, 0xc9b8a4);
     panel.setInteractive();
+
+    this.add
+      .rectangle(width / 2, height - PANEL_HEIGHT, width, 6, 0x8b7355, 1)
+      .setDepth(1001);
 
     const slotCount = ITEMS.length;
     const slotGap = 200;
