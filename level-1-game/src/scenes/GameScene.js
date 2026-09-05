@@ -126,11 +126,10 @@ export default class GameScene extends Phaser.Scene {
   createHud(width, height) {
     const playHeight = height - PANEL_HEIGHT;
     const isoSlope = 0.5;
-    const dip = 72;
-    const centerX = this.bgX + this.bgWidth / 2;
-    const vHalf = dip / isoSlope;
-    const vLeft = centerX - vHalf;
-    const vRight = centerX + vHalf;
+    const vLeft = this.bgX + (422 / 1248) * this.bgWidth;
+    const vRight = this.bgX + (862 / 1248) * this.bgWidth;
+    const centerX = (vLeft + vRight) / 2;
+    const dip = Math.min(isoSlope * (centerX - vLeft), PANEL_HEIGHT - 28);
     const vBottom = playHeight + dip;
 
     const panel = this.add.graphics();
