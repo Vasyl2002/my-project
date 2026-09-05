@@ -124,23 +124,44 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createHud(width, height) {
-    const panelY = height - PANEL_HEIGHT / 2;
+    const playHeight = height - PANEL_HEIGHT;
+    const isoSlope = 0.5;
+    const dip = 72;
+    const centerX = this.bgX + this.bgWidth / 2;
+    const vHalf = dip / isoSlope;
+    const vLeft = centerX - vHalf;
+    const vRight = centerX + vHalf;
+    const vBottom = playHeight + dip;
 
-    const panel = this.add.rectangle(
-      width / 2,
-      panelY,
-      width,
-      PANEL_HEIGHT,
-      0xe7d7c2,
-      1,
-    );
+    const panel = this.add.graphics();
     panel.setDepth(1000);
-    panel.setInteractive();
+    panel.fillStyle(0xe8d4b8, 1);
+    panel.beginPath();
+    panel.moveTo(0, height);
+    panel.lineTo(width, height);
+    panel.lineTo(width, playHeight);
+    panel.lineTo(vRight, playHeight);
+    panel.lineTo(centerX, vBottom);
+    panel.lineTo(vLeft, playHeight);
+    panel.lineTo(0, playHeight);
+    panel.closePath();
+    panel.fillPath();
 
-    this.add
-      .rectangle(width / 2, height - PANEL_HEIGHT, width, 6, 0x8b7355, 1)
-      .setDepth(1001);
+    panel.lineStyle(4, 0x8b7355, 1);
+    panel.beginPath();
+    panel.moveTo(0, playHeight);
+    panel.lineTo(vLeft, playHeight);
+    panel.lineTo(centerX, vBottom);
+    panel.lineTo(vRight, playHeight);
+    panel.lineTo(width, playHeight);
+    panel.strokePath();
 
+    panel.setInteractive(
+      new Phaser.Geom.Rectangle(0, playHeight, width, PANEL_HEIGHT),
+      Phaser.Geom.Rectangle.Contains,
+    );
+
+    const panelY = playHeight + PANEL_HEIGHT * 0.62;
     const slotCount = ITEMS.length;
     const slotGap = 200;
     const slotsWidth = (slotCount - 1) * slotGap;
