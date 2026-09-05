@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 /**
- * Coordinates are in the original 1920x1080 background space.
- * Click the play area (Dev Mode) and paste { x, y } here.
+ * Coordinates are in the original 1920x1080 click space.
+ * Click the room (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
   { key: 'banana', x: 582, y: 229, size: 68, angle: -18 },
@@ -15,8 +15,8 @@ const ITEMS = [
 
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
-const PANEL_HEIGHT = 200;
-const HUD_ICON_SIZE = 168;
+const PANEL_HEIGHT = 150;
+const HUD_ICON_SIZE = 120;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -47,23 +47,45 @@ export default class GameScene extends Phaser.Scene {
     const playWidth = width;
     const playHeight = height - PANEL_HEIGHT;
 
-    this.playWidth = playWidth;
-    this.playHeight = playHeight;
+    this.cameras.main.setBackgroundColor('#000000');
 
-    const bg = this.add.image(0, 0, 'bg').setOrigin(0, 0);
-    bg.setDisplaySize(playWidth, playHeight);
+    const bgSource = this.textures.get('bg').getSourceImage();
+    const fitScaleValue = Math.min(
+      playWidth / bgSource.width,
+      playHeight / bgSource.height,
+    );
+    const bgWidth = bgSource.width * fitScaleValue;
+    const bgHeight = bgSource.height * fitScaleValue;
+    const bgX = (playWidth - bgWidth) / 2;
+    const bgY = (playHeight - bgHeight) / 2;
+
+    this.bgX = bgX;
+    this.bgY = bgY;
+    this.bgWidth = bgWidth;
+    this.bgHeight = bgHeight;
+
+    const bg = this.add.image(bgX, bgY, 'bg').setOrigin(0, 0);
+    bg.setDisplaySize(bgWidth, bgHeight);
     bg.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, playWidth, playHeight),
+      new Phaser.Geom.Rectangle(0, 0, bgWidth, bgHeight),
       Phaser.Geom.Rectangle.Contains,
     );
     bg.on('pointerdown', (pointer) => {
-      if (pointer.worldY >= playHeight) {
+      const localX = pointer.worldX - bgX;
+      const localY = pointer.worldY - bgY;
+
+      if (
+        localX < 0 ||
+        localY < 0 ||
+        localX > bgWidth ||
+        localY > bgHeight
+      ) {
         return;
       }
 
       this.showClickCoords(
-        Math.round((pointer.worldX / playWidth) * DESIGN_WIDTH),
-        Math.round((pointer.worldY / playHeight) * DESIGN_HEIGHT),
+        Math.round((localX / bgWidth) * DESIGN_WIDTH),
+        Math.round((localY / bgHeight) * DESIGN_HEIGHT),
         pointer.worldX,
         pointer.worldY,
       );
@@ -90,15 +112,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   toPlayX(x) {
-    return (x / DESIGN_WIDTH) * this.playWidth;
+    return this.bgX + (x / DESIGN_WIDTH) * this.bgWidth;
   }
 
   toPlayY(y) {
-    return (y / DESIGN_HEIGHT) * this.playHeight;
+    return this.bgY + (y / DESIGN_HEIGHT) * this.bgHeight;
   }
 
   toPlaySize(size) {
-    return size * (this.playHeight / DESIGN_HEIGHT);
+    return size * (this.bgWidth / DESIGN_WIDTH);
   }
 
   createHud(width, height) {
@@ -140,7 +162,7 @@ export default class GameScene extends Phaser.Scene {
     this.counterText = this.add
       .text(width - 48, panelY, `0/${this.totalCount}`, {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '48px',
+        fontSize: '42px',
         fontStyle: 'bold',
         color: '#3b332b',
       })
