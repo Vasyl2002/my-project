@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 /**
- * Coordinates are in game pixels (1920x1080).
- * Click the background (Dev Mode) and paste { x, y } here.
+ * Coordinates are in the original 1920x1080 background space.
+ * Click the play area (Dev Mode) and paste { x, y } here.
  */
 const ITEMS = [
   { key: 'banana', x: 582, y: 229, size: 68, angle: -18 },
@@ -13,8 +13,10 @@ const ITEMS = [
   { key: 'pencil', x: 505, y: 752, size: 82, angle: 68 },
 ];
 
-const PANEL_HEIGHT = 110;
-const HUD_ICON_SIZE = 56;
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1080;
+const PANEL_HEIGHT = 200;
+const HUD_ICON_SIZE = 148;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -42,25 +44,40 @@ export default class GameScene extends Phaser.Scene {
 
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
+    const playWidth = width;
+    const playHeight = height - PANEL_HEIGHT;
+
+    this.playWidth = playWidth;
+    this.playHeight = playHeight;
 
     const bg = this.add.image(0, 0, 'bg').setOrigin(0, 0);
-    bg.setDisplaySize(width, height);
+    bg.setDisplaySize(playWidth, playHeight);
     bg.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, width, height),
+      new Phaser.Geom.Rectangle(0, 0, playWidth, playHeight),
       Phaser.Geom.Rectangle.Contains,
     );
     bg.on('pointerdown', (pointer) => {
+      if (pointer.worldY >= playHeight) {
+        return;
+      }
+
       this.showClickCoords(
-        Math.round(pointer.worldX),
-        Math.round(pointer.worldY),
+        Math.round((pointer.worldX / playWidth) * DESIGN_WIDTH),
+        Math.round((pointer.worldY / playHeight) * DESIGN_HEIGHT),
+        pointer.worldX,
+        pointer.worldY,
       );
     });
 
     this.createHud(width, height);
 
     for (const item of ITEMS) {
-      const sprite = this.add.image(item.x, item.y, item.key);
-      sprite.setScale(fitScale(sprite, item.size));
+      const sprite = this.add.image(
+        this.toPlayX(item.x),
+        this.toPlayY(item.y),
+        item.key,
+      );
+      sprite.setScale(fitScale(sprite, this.toPlaySize(item.size)));
       sprite.setAngle(item.angle);
       sprite.setDepth(10);
       sprite.setData('itemKey', item.key);
@@ -72,6 +89,18 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  toPlayX(x) {
+    return (x / DESIGN_WIDTH) * this.playWidth;
+  }
+
+  toPlayY(y) {
+    return (y / DESIGN_HEIGHT) * this.playHeight;
+  }
+
+  toPlaySize(size) {
+    return size * (this.playHeight / DESIGN_HEIGHT);
+  }
+
   createHud(width, height) {
     const panelY = height - PANEL_HEIGHT / 2;
 
@@ -81,14 +110,16 @@ export default class GameScene extends Phaser.Scene {
       width,
       PANEL_HEIGHT,
       0xf4efe6,
-      0.96,
+      1,
     );
     panel.setDepth(1000);
+    panel.setStrokeStyle(3, 0xc9b8a4);
+    panel.setInteractive();
 
     const slotCount = ITEMS.length;
-    const slotGap = 88;
+    const slotGap = 200;
     const slotsWidth = (slotCount - 1) * slotGap;
-    const startX = width / 2 - slotsWidth / 2 - 40;
+    const startX = width / 2 - slotsWidth / 2 - 50;
 
     ITEMS.forEach((item, index) => {
       const x = startX + index * slotGap;
@@ -104,9 +135,9 @@ export default class GameScene extends Phaser.Scene {
     });
 
     this.counterText = this.add
-      .text(width - 36, panelY, `0/${this.totalCount}`, {
+      .text(width - 48, panelY, `0/${this.totalCount}`, {
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '32px',
+        fontSize: '48px',
         fontStyle: 'bold',
         color: '#3b332b',
       })
@@ -114,12 +145,12 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(1002);
   }
 
-  showClickCoords(x, y) {
-    const coords = { x, y };
+  showClickCoords(designX, designY, screenX, screenY) {
+    const coords = { x: designX, y: designY };
     console.log(coords);
 
     const label = this.add
-      .text(x, y, `{ x: ${x}, y: ${y} }`, {
+      .text(screenX, screenY, `{ x: ${designX}, y: ${designY} }`, {
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '22px',
         fontStyle: 'bold',
