@@ -8,7 +8,7 @@ import { Store } from './store.js';
 import { Rpc } from './rpc.js';
 import { discover, validatePools } from './discover.js';
 import { poolAbi } from './abi.js';
-import { routes } from './math.js';
+import { routes, budgetDelay } from './math.js';
 import { artifact, simulate, checkOverrides } from './simulate.js';
 import { scheduledReport } from './report.js';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -221,7 +221,10 @@ export async function main() {
           store.event('discovery_error');
         }
       }
-      if ((dirty && now - lastPoll >= 12000) || now - lastPoll >= cfg.pollMs) {
+      const remaining =
+        cfg.dailyCalls - store.get('rpc:' + new Date(now).toISOString().slice(0, 10), 0);
+      const interval = Math.max(12000, budgetDelay(now, remaining, 4 + cfg.simulations));
+      if ((dirty || now - lastPoll >= cfg.pollMs) && now - lastPoll >= interval) {
         dirty = false;
         lastPoll = now;
         try {

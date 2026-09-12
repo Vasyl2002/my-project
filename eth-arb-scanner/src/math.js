@@ -1,4 +1,9 @@
 import { WETH } from './config.js';
+export function budgetDelay(now, remainingCalls, callsPerScan) {
+  if (remainingCalls <= 0) return Infinity;
+  const midnight = Math.floor(now / 86400000) * 86400000 + 86400000;
+  return Math.ceil(((midnight - now) * callsPerScan * 1.05) / remainingCalls);
+}
 export function v2Out(amount, reserveIn, reserveOut, fee = 3000) {
   if (amount <= 0n || reserveIn <= 0n || reserveOut <= 0n) return 0n;
   const effective = amount * BigInt(1000000 - fee);

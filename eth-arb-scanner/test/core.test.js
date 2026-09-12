@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseEther } from 'viem';
 import { config, WETH, PROBE } from '../src/config.js';
-import { v2Out, routes, gasCost } from '../src/math.js';
+import { v2Out, routes, gasCost, budgetDelay } from '../src/math.js';
 import { selectPools } from '../src/discover.js';
 import { Store } from '../src/store.js';
 import { localClock, reportText, scheduledReport } from '../src/report.js';
@@ -51,6 +51,13 @@ test('spot filter handles reversed ordering and fees', () => {
 });
 test('gas reserve includes intrinsic overhead, margin, doubled base fee and tip', () => {
   assert.equal(gasCost(150000n, 10n, 2n, 2500n), 5500000n);
+});
+test('RPC pacing spreads budget across UTC day and pauses at exhaustion', () => {
+  const midnight = Date.parse('2026-09-12T00:00:00Z');
+  assert.equal(budgetDelay(midnight, 15000, 8), 48384);
+  assert.equal(budgetDelay(midnight, 0, 8), Infinity);
+  assert.ok(budgetDelay(midnight + 12 * 3600000, 15000, 8) < budgetDelay(midnight, 15000, 8));
+  assert.ok(budgetDelay(midnight, 1000, 8) > budgetDelay(midnight, 15000, 8));
 });
 test('discovery ignores spoof names, non-Ethereum, v4, low liquidity and singleton pools', () => {
   const token = '0x' + 'a'.repeat(40),
