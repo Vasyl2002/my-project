@@ -1,0 +1,25 @@
+name: Ethereum scanner
+on:
+  push:
+    paths: ["eth-arb-scanner/**", ".github/workflows/eth-arb-scanner.yml"]
+  pull_request:
+    paths: ["eth-arb-scanner/**", ".github/workflows/eth-arb-scanner.yml"]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: eth-arb-scanner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: eth-arb-scanner/package-lock.json
+      - run: npm ci
+      - run: npm run compile
+      - run: npm test
+      - run: docker build -t eth-arb-scanner:test .

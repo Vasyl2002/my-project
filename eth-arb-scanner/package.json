@@ -1,0 +1,28 @@
+{
+  "name": "eth-arb-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/main.js",
+    "discover": "node --env-file-if-exists=.env src/discover.js",
+    "check": "node --env-file-if-exists=.env src/check.js",
+    "report": "node --env-file-if-exists=.env src/report-cli.js",
+    "test": "node --test",
+    "compile": "node src/compile.js"
+  },
+  "dependencies": {
+    "solc": "0.8.37",
+    "viem": "2.56.3",
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
+  }
+}
