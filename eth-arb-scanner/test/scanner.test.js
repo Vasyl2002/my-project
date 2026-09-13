@@ -98,3 +98,98 @@ test('a failed snapshot does not advance the last successful block', async () =>
     h.close();
   }
 });
+test('zero candidates still triggers a loss-making control, persisted across restart', async () => {
+  const h = harness();
+  try {
+    h.scanner.rpc.multi = async () => [
+      [1000n, 2000n, 0],
+      [1000n, 2000n, 0],
+    ];
+    const request = h.scanner.rpc.request;
+    h.scanner.rpc.request = async (method, params) =>
+      method === 'eth_call'
+        ? encodeFunctionResult({
+            abi: h.scanner.compiled.abi,
+            functionName: 'run',
+            result: [parseEther('0.019'), 200000n],
+          })
+        : request(method, params);
+    await h.scanner.scan();
+    const count = (kind) =>
+      h.store.db.prepare('SELECT count(*) AS n FROM events WHERE kind=?').get(kind).n;
+    assert.equal(count('candidate'), 0);
+    assert.equal(count('control_ok'), 1);
+    assert.equal(h.store.db.prepare('SELECT count(*) AS n FROM signals').get().n, 0);
+    const nearest = JSON.parse(
+      h.store.db.prepare("SELECT data FROM events WHERE kind='near_routes'").get().data,
+    );
+    assert.equal(nearest.routes.length, 2);
+    assert.ok(nearest.routes[0].bps < 0);
+    h.next();
+    const restarted = new Scanner(h.scanner.cfg, h.store, h.scanner.rpc);
+    restarted.pools = pools;
+    await restarted.scan();
+    assert.equal(count('control_attempt'), 1);
+  } finally {
+    h.close();
+  }
+});
+test('control uses the existing simulation quota and unconfirmed results are excluded', async () => {
+  const h = harness();
+  try {
+    h.scanner.cfg.simulations = 1;
+    let calls = 0;
+    const request = h.scanner.rpc.request;
+    h.scanner.rpc.request = (method, params) => {
+      if (method === 'eth_call') calls++;
+      return request(method, params);
+    };
+    h.orphan();
+    await h.scanner.scan();
+    assert.equal(calls, 1);
+    assert.equal(
+      h.store.db.prepare("SELECT count(*) AS n FROM events WHERE kind='control_ok'").get().n,
+      0,
+    );
+    assert.equal(
+      h.store.db.prepare("SELECT count(*) AS n FROM events WHERE kind='near_routes'").get().n,
+      0,
+    );
+  } finally {
+    h.close();
+  }
+});
+test('failed snapshot retries do not inflate gaps; null block is not a reorganization', async () => {
+  const h = harness();
+  try {
+    await h.scanner.scan();
+    h.next();
+    h.next();
+    h.next();
+    const multi = h.scanner.rpc.multi;
+    h.scanner.rpc.multi = async () => [null, null];
+    await assert.rejects(h.scanner.scan());
+    await assert.rejects(h.scanner.scan());
+    assert.equal(
+      h.store.db.prepare("SELECT count(*) AS n FROM events WHERE kind='gap'").get().n,
+      0,
+    );
+    h.scanner.rpc.multi = multi;
+    await h.scanner.scan();
+    assert.equal(
+      JSON.parse(h.store.db.prepare("SELECT data FROM events WHERE kind='gap'").get().data).blocks,
+      2,
+    );
+    h.next();
+    const request = h.scanner.rpc.request;
+    h.scanner.rpc.request = (method, params) =>
+      method === 'eth_getBlockByNumber' && params[0] !== 'latest' ? null : request(method, params);
+    await assert.rejects(h.scanner.scan(), /RPC_BLOCK_UNAVAILABLE/);
+    assert.equal(
+      h.store.db.prepare("SELECT count(*) AS n FROM events WHERE kind='reorg'").get().n,
+      0,
+    );
+  } finally {
+    h.close();
+  }
+});

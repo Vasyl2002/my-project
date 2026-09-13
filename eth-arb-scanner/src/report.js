@@ -1,4 +1,5 @@
 import { formatEther } from 'viem';
+import { diagnosticLines, splitMessage } from './diagnostics.js';
 export function localClock(date, zone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone,
@@ -47,11 +48,11 @@ export function reportText(store, cfg, now = Date.now()) {
     `Период: ${new Date(since).toISOString()} — ${new Date(now).toISOString()}`,
     `Пулов: ${pools.length}; токенов: ${new Set(pools.map((p) => p.token)).size}`,
     `Снимков состояния: ${counts.scan || 0}; найдено маршрутов-кандидатов: ${counts.candidate || 0}`,
-    `Симуляций: ${counts.sim_ok || 0} успешных, ${counts.sim_fail || 0} с ошибкой`,
+    `Симуляции кандидатов: ${counts.sim_ok || 0} успешных, ${counts.sim_fail || 0} с ошибкой`,
     `Положительных результатов после бюджета газа: ${signals.length}; уникальных маршрутов: ${best.size}`,
     `Повторные проверки: ${counts.recheck_ok || 0} положительных из ${(counts.recheck_ok || 0) + (counts.recheck_lost || 0)}; ошибок ${counts.recheck_error || 0}`,
     `Из них подтверждены ровно на следующем блоке: ${nextBlock}; истекли без проверки: ${counts.recheck_expired || 0}`,
-    `Пропущено блоков наблюдения: ${gaps}; реорганизаций: ${counts.reorg || 0}; ошибок обновления пулов: ${counts.discovery_error || 0}`,
+    `Пропущено блоков наблюдения: ${gaps}; смен хеша блока / расхождений RPC: ${counts.reorg || 0}; ошибок обновления пулов: ${counts.discovery_error || 0}`,
     `Ошибок сканирования: ${counts.scan_error || 0}; обрывов WS: ${counts.ws_disconnect || 0}`,
     `Последний блок: ${last?.number || 'нет'}; возраст: ${last ? Math.round((now - last.at) / 60000) + ' мин' : 'нет данных'}`,
     `RPC-запросов сегодня (UTC): ${store.get('rpc:' + new Date(now).toISOString().slice(0, 10), 0)} / ${cfg.dailyCalls}`,
@@ -63,6 +64,7 @@ export function reportText(store, cfg, now = Date.now()) {
     );
   if (!top.length)
     lines.push('\nПодтверждённых симуляцией положительных результатов за период нет.');
+  lines.push(...diagnosticLines(store, since, now));
   lines.push(
     '\nРезультаты разных блоков не суммируются в доход. Бюджет газа консервативный; исполнение в будущем не гарантировано.',
   );
@@ -70,6 +72,9 @@ export function reportText(store, cfg, now = Date.now()) {
 }
 export async function sendTelegram(cfg, text) {
   if (!cfg.telegramToken || !cfg.chat) throw new Error('TELEGRAM_NOT_CONFIGURED');
+  for (const chunk of splitMessage(text)) await sendChunk(cfg, chunk);
+}
+async function sendChunk(cfg, text) {
   const response = await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -86,11 +91,25 @@ export async function sendTelegram(cfg, text) {
 }
 export async function scheduledReport(store, cfg, now = Date.now()) {
   const clock = localClock(new Date(now), cfg.zone);
-  if (clock.time < cfg.time || store.get('reportDate') === clock.date) return;
   if (!cfg.telegramToken) return;
-  const text = reportText(store, cfg, now);
-  await sendTelegram(cfg, text);
-  store.set('lastReportEnd', now);
-  store.set('reportDate', clock.date);
+  let pending = store.get('pendingReport');
+  if (!pending) {
+    if (clock.time < cfg.time || store.get('reportDate') === clock.date) return;
+    pending = {
+      date: clock.date,
+      end: now,
+      chunks: splitMessage(reportText(store, cfg, now)),
+      next: 0,
+    };
+    store.set('pendingReport', pending);
+  }
+  for (; pending.next < pending.chunks.length;) {
+    await sendChunk(cfg, pending.chunks[pending.next]);
+    pending.next++;
+    store.set('pendingReport', pending);
+  }
+  store.set('lastReportEnd', pending.end);
+  store.set('reportDate', pending.date);
+  store.set('pendingReport', null);
   store.prune();
 }

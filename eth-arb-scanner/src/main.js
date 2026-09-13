@@ -8,7 +8,7 @@ import { Store } from './store.js';
 import { Rpc } from './rpc.js';
 import { discover, validatePools } from './discover.js';
 import { poolAbi } from './abi.js';
-import { routes, budgetDelay } from './math.js';
+import { rankedRoutes, budgetDelay } from './math.js';
 import { artifact, simulate, checkOverrides } from './simulate.js';
 import { scheduledReport } from './report.js';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -35,6 +35,7 @@ export class Scanner {
     );
   }
   async scan() {
+    const sampleAt = Date.now();
     const block = await this.rpc.request('eth_getBlockByNumber', ['latest', false]);
     if (!block?.hash || !block.baseFeePerGas) throw new Error('INVALID_MAINNET_BLOCK');
     const height = Number(BigInt(block.number)),
@@ -42,14 +43,13 @@ export class Scanner {
     if (previous?.hash === block.hash) return false;
     if (previous) {
       const old = await this.rpc.request('eth_getBlockByNumber', [toHex(previous.number), false]);
+      if (!old?.hash) throw new Error('RPC_BLOCK_UNAVAILABLE');
       if (old?.hash !== previous.hash) {
         this.store.db.prepare('DELETE FROM signals').run();
         this.pending = [];
         this.store.set('pending', []);
         this.store.event('reorg');
       } else if (height < previous.number) return false;
-      if (height > previous.number + 1)
-        this.store.event('gap', { blocks: height - previous.number - 1 });
     }
     const stateTag = { blockHash: block.hash, requireCanonical: true };
     const values = await this.rpc.multi(
@@ -61,15 +61,45 @@ export class Scanner {
       stateTag,
     );
     const states = new Map(this.pools.map((p, i) => [p.address, values[i]]));
+    this.store.event('pool_sample', {
+      pools: this.pools.map((p) => p.address),
+      failed: this.pools.filter((p, i) => values[i] == null).map((p) => p.address),
+    });
     if (values.some((x) => x === null))
       this.store.event('pool_read_failure', { count: values.filter((x) => x === null).length });
     if (values.every((x) => x === null)) throw new Error('ALL_POOL_READS_FAILED');
-    const opportunities = routes(this.pools, states, this.cfg.spreadBps);
+    const ranked = rankedRoutes(this.pools, states);
+    const opportunities = ranked.filter((r) => r.bps > this.cfg.spreadBps);
     for (const r of opportunities) this.store.event('candidate', { route: r.key });
     const staged = [];
     const rechecks = [];
+    const controlResults = [];
     const next = [];
     let used = 0;
+    let controlJob;
+    if (
+      ranked.length &&
+      sampleAt - this.store.get('lastControlAttemptAt', 0) >= this.cfg.controlMs
+    ) {
+      // Rotate among the three nearest routes, including those rejected by the filter.
+      const cursor = this.store.get('controlCursor', 0);
+      const r = ranked[cursor % Math.min(3, ranked.length)];
+      const amount = this.cfg.sizes.reduce((a, b) => (a < b ? a : b));
+      controlJob = { r, amount };
+      used++;
+      this.store.set('lastControlAttemptAt', sampleAt);
+      this.store.set('controlCursor', cursor + 1);
+      this.store.event('control_attempt', { route: r.key, block: height });
+      try {
+        const s = await simulate(this.rpc, this.compiled, r, amount, block, this.cfg);
+        controlResults.push({ ...s, minProfit: this.cfg.minProfit.toString() });
+        if (BigInt(s.net) >= this.cfg.minProfit) staged.push(s);
+      } catch (e) {
+        this.store.event('control_fail', {
+          code: /^RPC_[A-Z0-9_-]+$/.test(e.message) ? e.message : 'SIMULATION_FAILED',
+        });
+      }
+    }
     for (const p of this.pending) {
       if (p.block >= height) {
         next.push(p);
@@ -103,7 +133,11 @@ export class Scanner {
         this.store.event('recheck_error');
       }
     }
-    const jobs = opportunities.flatMap((r) => this.cfg.sizes.map((amount) => ({ r, amount })));
+    const jobs = opportunities
+      .flatMap((r) => this.cfg.sizes.map((amount) => ({ r, amount })))
+      .filter(
+        (job) => !controlJob || job.r.key !== controlJob.r.key || job.amount !== controlJob.amount,
+      );
     const available = this.cfg.simulations - used;
     for (let i = 0; i < Math.min(jobs.length, available); i++) {
       const job = jobs[(this.cursor + i) % jobs.length];
@@ -118,19 +152,42 @@ export class Scanner {
     this.cursor += Math.min(jobs.length, available);
     // Discard results if the sampled block became noncanonical while work ran.
     const check = await this.rpc.request('eth_getBlockByNumber', [block.number, false]);
+    if (!check?.hash) throw new Error('RPC_BLOCK_UNAVAILABLE');
     if (check?.hash !== block.hash) {
       this.store.event('reorg');
       return false;
     }
     for (const r of rechecks) this.store.event(r.kind, r.data);
+    for (const result of controlResults) this.store.event('control_ok', result);
+    this.store.event('near_routes', {
+      block: height,
+      thresholdBps: this.cfg.spreadBps,
+      routes: ranked.slice(0, 3).map((r) => ({
+        key: r.key,
+        symbol: r.buy.symbol,
+        buy: r.buy.address,
+        sell: r.sell.address,
+        buyVenue: r.buy.venue,
+        sellVenue: r.sell.venue,
+        buyFee: r.buy.fee,
+        sellFee: r.sell.fee,
+        rawBps: r.rawBps,
+        bps: r.bps,
+      })),
+    });
+    if (previous && height > previous.number + 1)
+      this.store.event('gap', { blocks: height - previous.number - 1 });
     for (const s of staged) {
       this.store.signal(s);
       if (!next.some((p) => p.route === s.route && p.input === s.input)) next.push(s);
     }
     this.pending = next.slice(0, 100);
     this.store.set('pending', this.pending);
-    this.store.set('lastBlock', { number: height, hash: block.hash, at: Date.now() });
-    this.store.event('scan');
+    this.store.set('lastBlock', { number: height, hash: block.hash, at: Date.now(), sampleAt });
+    this.store.event('scan', {
+      intervalMs: previous ? Math.max(0, sampleAt - (previous.sampleAt || previous.at)) : null,
+      comparedRoutes: ranked.length,
+    });
     return true;
   }
 }

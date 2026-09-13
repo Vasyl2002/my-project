@@ -21,7 +21,7 @@ export function tokenPerWeth(pool, state) {
   }
   return pool.token0 === WETH ? ratio : 1 / ratio;
 }
-export function routes(pools, states, minBps) {
+export function rankedRoutes(pools, states) {
   const out = [];
   for (const a of pools)
     for (const b of pools) {
@@ -29,13 +29,19 @@ export function routes(pools, states, minBps) {
       const sa = states.get(a.address),
         sb = states.get(b.address);
       if (!sa || !sb) continue;
-      const ratio =
-        (tokenPerWeth(a, sa) / tokenPerWeth(b, sb)) * (1 - a.fee / 1e6) * (1 - b.fee / 1e6);
+      const pa = tokenPerWeth(a, sa),
+        pb = tokenPerWeth(b, sb);
+      if (!Number.isFinite(pa) || !Number.isFinite(pb) || pa <= 0 || pb <= 0) continue;
+      const rawBps = (pa / pb - 1) * 10000;
+      const ratio = (pa / pb) * (1 - a.fee / 1e6) * (1 - b.fee / 1e6);
       const bps = (ratio - 1) * 10000;
-      if (Number.isFinite(bps) && bps > minBps)
-        out.push({ buy: a, sell: b, bps, key: a.address + '>' + b.address });
+      if (Number.isFinite(bps))
+        out.push({ buy: a, sell: b, rawBps, bps, key: a.address + '>' + b.address });
     }
   return out.sort((a, b) => b.bps - a.bps);
+}
+export function routes(pools, states, minBps) {
+  return rankedRoutes(pools, states).filter((r) => r.bps > minBps);
 }
 export function gasCost(gasUsed, baseFee, priority, marginBps) {
   const units = ((gasUsed + 50000n) * (10000n + marginBps)) / 10000n;

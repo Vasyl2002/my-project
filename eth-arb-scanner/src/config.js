@@ -59,6 +59,7 @@ export function config(env = process.env) {
     minLiquidity: num('MIN_LIQUIDITY_USD', 20000, 1000, 1e9),
     minVolume: num('MIN_VOLUME_24H_USD', 500, 0, 1e12),
     simulations: Math.floor(num('MAX_SIMULATIONS_PER_BLOCK', 4, 1, 20)),
+    controlMs: num('CONTROL_INTERVAL_HOURS', 6, 1, 168) * 3600000,
     dailyCalls: Math.floor(num('MAX_RPC_CALLS_PER_DAY', 15000, 100, 1e7)),
     rpcInterval: num('RPC_INTERVAL_MS', 180, 100, 10000),
     pollMs: num('POLL_INTERVAL_MS', 30000, 12000, 600000),
