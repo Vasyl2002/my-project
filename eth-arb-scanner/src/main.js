@@ -46,6 +46,7 @@ export class Scanner {
       if (!old?.hash) throw new Error('RPC_BLOCK_UNAVAILABLE');
       if (old?.hash !== previous.hash) {
         this.store.db.prepare('DELETE FROM signals').run();
+        this.store.db.prepare('UPDATE simulation_results SET valid=0 WHERE valid=1').run();
         this.pending = [];
         this.store.set('pending', []);
         this.store.event('reorg');
@@ -72,6 +73,7 @@ export class Scanner {
     const opportunities = ranked.filter((r) => r.bps > this.cfg.spreadBps);
     for (const r of opportunities) this.store.event('candidate', { route: r.key });
     const staged = [];
+    const outcomes = [];
     const rechecks = [];
     const controlResults = [];
     const next = [];
@@ -93,6 +95,7 @@ export class Scanner {
       try {
         const s = await simulate(this.rpc, this.compiled, r, amount, block, this.cfg);
         controlResults.push({ ...s, minProfit: this.cfg.minProfit.toString() });
+        outcomes.push({ result: s, source: 'control' });
         if (BigInt(s.net) >= this.cfg.minProfit) staged.push(s);
       } catch (e) {
         this.store.event('control_fail', {
@@ -129,6 +132,7 @@ export class Scanner {
           kind: BigInt(s.net) >= this.cfg.minProfit ? 'recheck_ok' : 'recheck_lost',
           data: { route: p.route, block: height, delta: height - p.block },
         });
+        outcomes.push({ result: s, source: 'recheck' });
       } catch {
         this.store.event('recheck_error');
       }
@@ -144,6 +148,7 @@ export class Scanner {
       try {
         const s = await simulate(this.rpc, this.compiled, job.r, job.amount, block, this.cfg);
         this.store.event('sim_ok');
+        outcomes.push({ result: s, source: 'candidate' });
         if (BigInt(s.net) >= this.cfg.minProfit) staged.push(s);
       } catch {
         this.store.event('sim_fail');
@@ -158,6 +163,8 @@ export class Scanner {
       return false;
     }
     for (const r of rechecks) this.store.event(r.kind, r.data);
+    for (const item of outcomes)
+      this.store.simulation(item.result, item.source, this.cfg.minProfit);
     for (const result of controlResults) this.store.event('control_ok', result);
     this.store.event('near_routes', {
       block: height,

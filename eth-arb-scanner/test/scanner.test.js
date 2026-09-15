@@ -74,6 +74,12 @@ test('scanner saves positive full-cycle result once, then rechecks it at next bl
     const rows = h.store.db.prepare("SELECT data FROM events WHERE kind='recheck_ok'").all();
     assert.equal(rows.length, 1);
     assert.equal(JSON.parse(rows[0].data).delta, 1);
+    const sources = h.store.db
+      .prepare('SELECT DISTINCT source FROM simulation_results')
+      .all()
+      .map((r) => r.source)
+      .sort();
+    assert.deepEqual(sources, ['candidate', 'control', 'recheck']);
   } finally {
     h.close();
   }
@@ -84,6 +90,7 @@ test('block becoming noncanonical during simulation never produces a saved signa
     h.orphan();
     assert.equal(await h.scanner.scan(), false);
     assert.equal(h.store.db.prepare('SELECT count(*) AS n FROM signals').get().n, 0);
+    assert.equal(h.store.db.prepare('SELECT count(*) AS n FROM simulation_results').get().n, 0);
   } finally {
     h.close();
   }

@@ -1,5 +1,6 @@
 import { formatEther } from 'viem';
 import { diagnosticLines, splitMessage } from './diagnostics.js';
+import { resultLines } from './results.js';
 export function localClock(date, zone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone,
@@ -49,8 +50,8 @@ export function reportText(store, cfg, now = Date.now()) {
     `Пулов: ${pools.length}; токенов: ${new Set(pools.map((p) => p.token)).size}`,
     `Снимков состояния: ${counts.scan || 0}; найдено маршрутов-кандидатов: ${counts.candidate || 0}`,
     `Симуляции кандидатов: ${counts.sim_ok || 0} успешных, ${counts.sim_fail || 0} с ошибкой`,
-    `Положительных результатов после бюджета газа: ${signals.length}; уникальных маршрутов: ${best.size}`,
-    `Повторные проверки: ${counts.recheck_ok || 0} положительных из ${(counts.recheck_ok || 0) + (counts.recheck_lost || 0)}; ошибок ${counts.recheck_error || 0}`,
+    `Сигналов, достигших действовавшего порога прибыли: ${signals.length}; уникальных маршрутов: ${best.size}`,
+    `Повторные проверки: ${counts.recheck_ok || 0} достигли порога из ${(counts.recheck_ok || 0) + (counts.recheck_lost || 0)}; ошибок ${counts.recheck_error || 0}`,
     `Из них подтверждены ровно на следующем блоке: ${nextBlock}; истекли без проверки: ${counts.recheck_expired || 0}`,
     `Пропущено блоков наблюдения: ${gaps}; смен хеша блока / расхождений RPC: ${counts.reorg || 0}; ошибок обновления пулов: ${counts.discovery_error || 0}`,
     `Ошибок сканирования: ${counts.scan_error || 0}; обрывов WS: ${counts.ws_disconnect || 0}`,
@@ -62,8 +63,8 @@ export function reportText(store, cfg, now = Date.now()) {
     lines.push(
       `\n${s.symbol}: вход ${eth(s.input)} WETH; расчётный плюс ${eth(s.net)} WETH\nБлок ${s.block}\nКупить: https://etherscan.io/address/${s.buy}\nПродать: https://etherscan.io/address/${s.sell}`,
     );
-  if (!top.length)
-    lines.push('\nПодтверждённых симуляцией положительных результатов за период нет.');
+  if (!top.length) lines.push('\nСигналов, достигших порога прибыли, за период нет.');
+  lines.push(...resultLines(store, cfg, since, now));
   lines.push(...diagnosticLines(store, since, now));
   lines.push(
     '\nРезультаты разных блоков не суммируются в доход. Бюджет газа консервативный; исполнение в будущем не гарантировано.',
