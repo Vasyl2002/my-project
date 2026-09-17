@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { encodeFunctionData, decodeFunctionResult, toHex, parseEther } from 'viem';
 import { PROBE } from './config.js';
-import { gasCost } from './math.js';
+import { gasCost, gasDetails } from './math.js';
 import { compile } from './compile.js';
 export function artifact() {
   try {
@@ -38,6 +38,13 @@ export async function simulate(rpc, compiled, route, amount, block, cfg) {
     input: amount.toString(),
     output: output.toString(),
     gasUsed: gasUsed.toString(),
+    ...gasDetails(
+      gasUsed,
+      BigInt(block.baseFeePerGas),
+      cfg.priority,
+      cfg.gasMargin,
+      output - amount,
+    ),
     gasBudget: cost.toString(),
     net: (output - amount - cost).toString(),
   };

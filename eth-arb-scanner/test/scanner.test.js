@@ -200,3 +200,45 @@ test('failed snapshot retries do not inflate gaps; null block is not a reorganiz
     h.close();
   }
 });
+
+test('adaptive sizing shares quota, pins calls to one block and saves gas details', async () => {
+  const h = harness();
+  try {
+    h.scanner.cfg.sizes = ['0.005', '0.02', '0.1', '0.5'].map((s) => parseEther(s));
+    h.store.set('lastControlAttemptAt', Date.now());
+    let calls = 0;
+    const request = h.scanner.rpc.request;
+    h.scanner.rpc.request = async (method, params) => {
+      if (method === 'eth_call') {
+        calls++;
+        assert.equal(params[1].blockHash, '0x' + 'a'.padStart(64, '0'));
+        const { decodeFunctionData } = await import('viem');
+        const { args } = decodeFunctionData({ abi: h.scanner.compiled.abi, data: params[0].data });
+        const amount = args[1];
+        const peak = parseEther('0.06');
+        const distance = amount > peak ? amount - peak : peak - amount;
+        const gain = parseEther('0.001') - distance / 100n;
+        return encodeFunctionResult({
+          abi: h.scanner.compiled.abi,
+          functionName: 'run',
+          result: [amount + gain, 200000n],
+        });
+      }
+      return request(method, params);
+    };
+    await h.scanner.scan();
+    assert.equal(calls, 4);
+    const results = h.store.db
+      .prepare('SELECT data FROM simulation_results')
+      .all()
+      .map((r) => JSON.parse(r.data));
+    assert.equal(results.length, 4);
+    const refined = results.filter((s) => s.refined);
+    assert.equal(refined.length, 1);
+    assert.equal(refined[0].input, parseEther('0.06').toString());
+    assert.ok(results.every((s) => s.baseFee === '1' && s.estimatedGasUnits === '250000'));
+    assert.ok(BigInt(refined[0].net) > BigInt(results[1].net));
+  } finally {
+    h.close();
+  }
+});

@@ -18,3 +18,9 @@
 - Docker Engine локально недоступен. Для проверки сборки на Ubuntu добавлен workflow `.github/workflows/eth-arb-scanner.yml`; результат его запуска следует смотреть в GitHub Actions.
 
 Автоматическая проверка не доказывает отсутствие любых ошибок. Следующий эксплуатационный шаг — запустить наблюдение на сервере со своими RPC/Telegram настройками и проверить первую сводку.
+
+## 2026-09-17: gas diagnostics and bounded amount refinement
+
+Added separate current-block fee estimates, recorded fee inputs and break-even total gas price. Conservative signal accounting is unchanged. Old rows remain readable without invented gas details. A single midpoint refinement shares the existing per-snapshot quota and configured amount bounds; all comparisons use the same block hash.
+
+Validation: 31 local tests, including estimate/budget divergence, integer break-even rounding, legacy/new report records, loss and boundary cases, and a scanner integration test finding a better intermediate amount with exactly four calls. No live transaction or Telegram message was sent for this update. This local refinement does not guarantee an optimal amount; gas remains a model of the simulation probe, not a transaction receipt.

@@ -109,3 +109,38 @@ test('legacy counters are not treated as known nonpositive results and report na
     f.close();
   }
 });
+
+test('mixed historical results separate positive estimates from negative budget outcomes', () => {
+  const f = fixture();
+  try {
+    f.store.simulation(sample(-10, 'old'), 'control', 100n);
+    f.store.simulation(
+      {
+        ...sample(-100, 'new'),
+        output: '1300000',
+        gasBudget: '500000',
+        net: '-200000',
+        gasUsed: '150000',
+        estimatedGasUnits: '200000',
+        baseFee: '1',
+        priorityFee: '0',
+        gasMarginBps: '2500',
+        estimatedGasCost: '200000',
+        estimatedNet: '100000',
+        breakEvenGasPrice: '1',
+        refined: true,
+      },
+      'candidate',
+      100n,
+    );
+    const text = resultLines(f.store, config({}), Date.now() - 10000, Date.now() + 1).join('\n');
+    assert.match(text, /≤0 — 2; >0, но ниже порога — 0; достигли порога — 0/);
+    assert.match(text, /С деталями газа: 1\/2; положительных по оценке комиссии блока: 1/);
+    assert.match(text, /Уточнений суммы: 1/);
+    assert.match(text, /до обновления/);
+    assert.match(text, /Лучший итог по оценке комиссии блока: new/);
+    assert.match(text, /Сигналы проверяются по бюджету/);
+  } finally {
+    f.close();
+  }
+});

@@ -47,3 +47,19 @@ export function gasCost(gasUsed, baseFee, priority, marginBps) {
   const units = ((gasUsed + 50000n) * (10000n + marginBps)) / 10000n;
   return units * (baseFee * 2n + priority);
 }
+// The probe measures internal execution only. The fixed overhead remains an estimate.
+export function gasDetails(gasUsed, baseFee, priority, marginBps, gross) {
+  const estimatedGasUnits = gasUsed + 50000n;
+  const estimatedGasCost = estimatedGasUnits * (baseFee + priority);
+  return Object.fromEntries(
+    Object.entries({
+      baseFee,
+      priorityFee: priority,
+      gasMarginBps: marginBps,
+      estimatedGasUnits,
+      estimatedGasCost,
+      estimatedNet: gross - estimatedGasCost,
+      breakEvenGasPrice: gross > 0n ? gross / estimatedGasUnits : null,
+    }).map(([key, value]) => [key, value === null ? null : value.toString()]),
+  );
+}

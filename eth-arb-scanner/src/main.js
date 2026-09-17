@@ -11,6 +11,7 @@ import { poolAbi } from './abi.js';
 import { rankedRoutes, budgetDelay } from './math.js';
 import { artifact, simulate, checkOverrides } from './simulate.js';
 import { scheduledReport } from './report.js';
+import { refinementJob } from './sizing.js';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export class Scanner {
   constructor(cfg, store, rpc) {
@@ -143,10 +144,23 @@ export class Scanner {
         (job) => !controlJob || job.r.key !== controlJob.r.key || job.amount !== controlJob.amount,
       );
     const available = this.cfg.simulations - used;
-    for (let i = 0; i < Math.min(jobs.length, available); i++) {
-      const job = jobs[(this.cursor + i) % jobs.length];
+    const attempted = new Set(outcomes.map(({ result: s }) => s.route + ':' + s.input));
+    let coarseUsed = 0;
+    for (let i = 0; i < available; i++) {
+      // Reserve only the last existing slot; fall back to the normal grid if no refinement exists.
+      let job =
+        i === available - 1 && available >= 2
+          ? refinementJob(outcomes, opportunities, this.cfg.sizes, attempted)
+          : null;
+      if (!job) {
+        if (coarseUsed >= jobs.length) break;
+        job = jobs[(this.cursor + coarseUsed) % jobs.length];
+        coarseUsed++;
+      }
+      attempted.add(job.r.key + ':' + job.amount);
       try {
         const s = await simulate(this.rpc, this.compiled, job.r, job.amount, block, this.cfg);
+        s.refined = Boolean(job.refined);
         this.store.event('sim_ok');
         outcomes.push({ result: s, source: 'candidate' });
         if (BigInt(s.net) >= this.cfg.minProfit) staged.push(s);
@@ -154,7 +168,7 @@ export class Scanner {
         this.store.event('sim_fail');
       }
     }
-    this.cursor += Math.min(jobs.length, available);
+    this.cursor += coarseUsed;
     // Discard results if the sampled block became noncanonical while work ran.
     const check = await this.rpc.request('eth_getBlockByNumber', [block.number, false]);
     if (!check?.hash) throw new Error('RPC_BLOCK_UNAVAILABLE');
