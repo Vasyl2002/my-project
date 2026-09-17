@@ -80,6 +80,14 @@ test('scanner saves positive full-cycle result once, then rechecks it at next bl
       .map((r) => r.source)
       .sort();
     assert.deepEqual(sources, ['candidate', 'control', 'recheck']);
+    const repeated = JSON.parse(
+      h.store.db.prepare("SELECT data FROM simulation_results WHERE source='recheck'").get().data,
+    );
+    assert.equal(repeated.origin.block, 10);
+    assert.equal(repeated.block, 11);
+    assert.equal(repeated.origin.input, repeated.input);
+    assert.equal(repeated.origin.hash, '0x' + 'a'.padStart(64, '0'));
+    assert.equal(repeated.origin.minProfit, h.scanner.cfg.minProfit.toString());
   } finally {
     h.close();
   }

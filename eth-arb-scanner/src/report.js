@@ -1,6 +1,7 @@
 import { formatEther } from 'viem';
 import { diagnosticLines, splitMessage } from './diagnostics.js';
 import { resultLines } from './results.js';
+import { recheckReport } from './rechecks.js';
 export function localClock(date, zone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone,
@@ -17,6 +18,7 @@ export function localClock(date, zone) {
 const eth = (x) => Number(formatEther(BigInt(x))).toFixed(6);
 export function reportText(store, cfg, now = Date.now()) {
   const since = store.get('lastReportEnd', now - 86400000);
+  const rechecks = recheckReport(store, since, now);
   const events = store.db
     .prepare('SELECT kind,count(*) AS n FROM events WHERE ts>=? AND ts<? GROUP BY kind')
     .all(since, now);
@@ -62,8 +64,10 @@ export function reportText(store, cfg, now = Date.now()) {
   for (const s of top)
     lines.push(
       `\n${s.symbol}: вход ${eth(s.input)} WETH; расчётный плюс ${eth(s.net)} WETH\nБлок ${s.block}\nКупить: https://etherscan.io/address/${s.buy}\nПродать: https://etherscan.io/address/${s.sell}`,
+      rechecks.forSignal(s),
     );
   if (!top.length) lines.push('\nСигналов, достигших порога прибыли, за период нет.');
+  lines.push(...rechecks.lines);
   lines.push(...resultLines(store, cfg, since, now));
   lines.push(...diagnosticLines(store, since, now));
   lines.push(

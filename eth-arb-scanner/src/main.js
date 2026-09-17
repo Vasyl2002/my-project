@@ -111,8 +111,20 @@ export class Scanner {
       }
       const buy = this.pools.find((x) => x.address === p.buy),
         sell = this.pools.find((x) => x.address === p.sell);
+      const origin = {
+        hash: p.hash,
+        block: p.block,
+        route: p.route,
+        input: p.input,
+        net: p.net,
+        symbol: p.symbol,
+        minProfit: p.minProfit ?? null,
+      };
       if (!buy || !sell || height - p.block > 5) {
-        this.store.event('recheck_expired');
+        rechecks.push({
+          kind: 'recheck_expired',
+          data: { origin, block: height, reason: !buy || !sell ? 'pool_unavailable' : 'too_old' },
+        });
         continue;
       }
       if (used >= Math.min(2, this.cfg.simulations)) {
@@ -129,13 +141,14 @@ export class Scanner {
           block,
           this.cfg,
         );
+        s.origin = origin;
         rechecks.push({
           kind: BigInt(s.net) >= this.cfg.minProfit ? 'recheck_ok' : 'recheck_lost',
           data: { route: p.route, block: height, delta: height - p.block },
         });
         outcomes.push({ result: s, source: 'recheck' });
       } catch {
-        this.store.event('recheck_error');
+        rechecks.push({ kind: 'recheck_error', data: { origin, block: height } });
       }
     }
     const jobs = opportunities
@@ -199,6 +212,7 @@ export class Scanner {
     if (previous && height > previous.number + 1)
       this.store.event('gap', { blocks: height - previous.number - 1 });
     for (const s of staged) {
+      s.minProfit = this.cfg.minProfit.toString();
       this.store.signal(s);
       if (!next.some((p) => p.route === s.route && p.input === s.input)) next.push(s);
     }

@@ -24,3 +24,7 @@
 Added separate current-block fee estimates, recorded fee inputs and break-even total gas price. Conservative signal accounting is unchanged. Old rows remain readable without invented gas details. A single midpoint refinement shares the existing per-snapshot quota and configured amount bounds; all comparisons use the same block hash.
 
 Validation: 31 local tests, including estimate/budget divergence, integer break-even rounding, legacy/new report records, loss and boundary cases, and a scanner integration test finding a better intermediate amount with exactly four calls. No live transaction or Telegram message was sent for this update. This local refinement does not guarantee an optimal amount; gas remains a model of the simulation probe, not a transaction receipt.
+
+## Linked recheck reporting
+
+All 33 local tests passed. Recheck records now retain the exact originating signal; the report distinguishes nonpositive results, positive results below threshold, and threshold success. Tests cover exact identity, prior-period origins, legacy records, invalidation, pending/error/expired states, and scanner metadata persistence. No live transactions or Telegram messages are sent by these tests.
