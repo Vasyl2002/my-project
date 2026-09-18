@@ -27,12 +27,18 @@ export function reportText(store, cfg, now = Date.now()) {
     .prepare("SELECT data FROM events WHERE kind='gap' AND ts>=? AND ts<?")
     .all(since, now)
     .reduce((n, e) => n + JSON.parse(e.data).blocks, 0);
-  const nextBlock = store.db
-    .prepare("SELECT data FROM events WHERE kind='recheck_ok' AND ts>=? AND ts<?")
+  const validRepeats = store.db
+    .prepare(
+      "SELECT data FROM simulation_results WHERE valid=1 AND source='recheck' AND ts>=? AND ts<?",
+    )
     .all(since, now)
-    .filter((e) => JSON.parse(e.data).delta === 1).length;
+    .map((e) => JSON.parse(e.data));
+  const successfulRepeats = validRepeats.filter((s) => BigInt(s.net) >= BigInt(s.minProfit));
+  const nextBlock = successfulRepeats.filter(
+    (s) => s.origin && s.block - s.origin.block === 1,
+  ).length;
   const signals = store.db
-    .prepare('SELECT data FROM signals WHERE ts>=? AND ts<?')
+    .prepare('SELECT data FROM signals WHERE valid=1 AND ts>=? AND ts<?')
     .all(since, now)
     .map((r) => JSON.parse(r.data));
   const best = new Map();
@@ -53,7 +59,8 @@ export function reportText(store, cfg, now = Date.now()) {
     `Снимков состояния: ${counts.scan || 0}; найдено маршрутов-кандидатов: ${counts.candidate || 0}`,
     `Симуляции кандидатов: ${counts.sim_ok || 0} успешных, ${counts.sim_fail || 0} с ошибкой`,
     `Сигналов, достигших действовавшего порога прибыли: ${signals.length}; уникальных маршрутов: ${best.size}`,
-    `Повторные проверки: ${counts.recheck_ok || 0} достигли порога из ${(counts.recheck_ok || 0) + (counts.recheck_lost || 0)}; ошибок ${counts.recheck_error || 0}`,
+    `Повторные проверки (действительные сохранённые результаты): ${successfulRepeats.length} достигли порога из ${validRepeats.length}; ошибок попыток ${counts.recheck_error || 0}`,
+    `Быстрые проходы повторной проверки: ${counts.priority_check || 0}; ошибок прохода: ${counts.priority_error || 0}. Проверка истории: ${store.get('historyAudit', false) ? 'ожидает завершения' : 'нет незавершённой проверки'}.`,
     `Из них подтверждены ровно на следующем блоке: ${nextBlock}; истекли без проверки: ${counts.recheck_expired || 0}`,
     `Пропущено блоков наблюдения: ${gaps}; смен хеша блока / расхождений RPC: ${counts.reorg || 0}; ошибок обновления пулов: ${counts.discovery_error || 0}`,
     `Ошибок сканирования: ${counts.scan_error || 0}; обрывов WS: ${counts.ws_disconnect || 0}`,

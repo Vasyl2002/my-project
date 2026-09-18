@@ -12,6 +12,7 @@ import { rankedRoutes, budgetDelay } from './math.js';
 import { artifact, simulate, checkOverrides } from './simulate.js';
 import { scheduledReport } from './report.js';
 import { refinementJob } from './sizing.js';
+import { beginAudit, auditHistory, priorityDecision } from './canonical.js';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export class Scanner {
   constructor(cfg, store, rpc) {
@@ -35,7 +36,15 @@ export class Scanner {
       `Validated ${pools.length} pools / ${new Set(pools.map((p) => p.token)).size} tokens`,
     );
   }
-  async scan() {
+  async scan({ recheckOnly = false } = {}) {
+    if (!(await auditHistory(this.store, this.rpc))) return false;
+    this.pending = this.pending.filter(
+      (p) =>
+        this.store.db
+          .prepare('SELECT valid FROM signals WHERE hash=? AND route=? AND input=?')
+          .get(p.hash, p.route, p.input)?.valid !== 0,
+    );
+    this.store.set('pending', this.pending);
     const sampleAt = Date.now();
     const block = await this.rpc.request('eth_getBlockByNumber', ['latest', false]);
     if (!block?.hash || !block.baseFeePerGas) throw new Error('INVALID_MAINNET_BLOCK');
@@ -46,30 +55,32 @@ export class Scanner {
       const old = await this.rpc.request('eth_getBlockByNumber', [toHex(previous.number), false]);
       if (!old?.hash) throw new Error('RPC_BLOCK_UNAVAILABLE');
       if (old?.hash !== previous.hash) {
-        this.store.db.prepare('DELETE FROM signals').run();
-        this.store.db.prepare('UPDATE simulation_results SET valid=0 WHERE valid=1').run();
-        this.pending = [];
-        this.store.set('pending', []);
+        beginAudit(this.store, previous.hash);
         this.store.event('reorg');
+        this.store.set('lastBlock', null);
+        return false;
       } else if (height < previous.number) return false;
     }
     const stateTag = { blockHash: block.hash, requireCanonical: true };
-    const values = await this.rpc.multi(
-      this.pools.map((p) => ({
-        address: p.address,
-        abi: poolAbi,
-        name: p.v3 ? 'slot0' : 'getReserves',
-      })),
-      stateTag,
-    );
+    const values = recheckOnly
+      ? []
+      : await this.rpc.multi(
+          this.pools.map((p) => ({
+            address: p.address,
+            abi: poolAbi,
+            name: p.v3 ? 'slot0' : 'getReserves',
+          })),
+          stateTag,
+        );
     const states = new Map(this.pools.map((p, i) => [p.address, values[i]]));
-    this.store.event('pool_sample', {
-      pools: this.pools.map((p) => p.address),
-      failed: this.pools.filter((p, i) => values[i] == null).map((p) => p.address),
-    });
+    if (!recheckOnly)
+      this.store.event('pool_sample', {
+        pools: this.pools.map((p) => p.address),
+        failed: this.pools.filter((p, i) => values[i] == null).map((p) => p.address),
+      });
     if (values.some((x) => x === null))
       this.store.event('pool_read_failure', { count: values.filter((x) => x === null).length });
-    if (values.every((x) => x === null)) throw new Error('ALL_POOL_READS_FAILED');
+    if (!recheckOnly && values.every((x) => x === null)) throw new Error('ALL_POOL_READS_FAILED');
     const ranked = rankedRoutes(this.pools, states);
     const opportunities = ranked.filter((r) => r.bps > this.cfg.spreadBps);
     for (const r of opportunities) this.store.event('candidate', { route: r.key });
@@ -81,6 +92,8 @@ export class Scanner {
     let used = 0;
     let controlJob;
     if (
+      !recheckOnly &&
+      !this.pending.length &&
       ranked.length &&
       sampleAt - this.store.get('lastControlAttemptAt', 0) >= this.cfg.controlMs
     ) {
@@ -127,7 +140,7 @@ export class Scanner {
         });
         continue;
       }
-      if (used >= Math.min(2, this.cfg.simulations)) {
+      if (used >= this.cfg.simulations) {
         next.push(p);
         continue;
       }
@@ -193,6 +206,12 @@ export class Scanner {
     for (const item of outcomes)
       this.store.simulation(item.result, item.source, this.cfg.minProfit);
     for (const result of controlResults) this.store.event('control_ok', result);
+    if (recheckOnly) {
+      this.pending = next;
+      this.store.set('pending', next);
+      this.store.event('priority_check', { block: height });
+      return true;
+    }
     this.store.event('near_routes', {
       block: height,
       thresholdBps: this.cfg.spreadBps,
@@ -240,6 +259,8 @@ export async function main() {
     lastScan = 0,
     lastPrune = 0,
     lastPing = 0,
+    lastPriority = 0,
+    reportRetryAt = 0,
     pongAt = Date.now();
   const stop = () => {
     stopped = true;
@@ -304,7 +325,11 @@ export async function main() {
         lastPing = now;
       }
       if (cfg.ws && !ws && now >= reconnectAt) connect();
-      if (now - store.get('discoveryAt', 0) > 86400000 && now - lastRefreshAttempt > 3600000) {
+      if (
+        !scanner.pending.length &&
+        now - store.get('discoveryAt', 0) > 86400000 &&
+        now - lastRefreshAttempt > 3600000
+      ) {
         lastRefreshAttempt = now;
         try {
           await scanner.refresh();
@@ -315,8 +340,33 @@ export async function main() {
       }
       const remaining =
         cfg.dailyCalls - store.get('rpc:' + new Date(now).toISOString().slice(0, 10), 0);
-      const interval = Math.max(12000, budgetDelay(now, remaining, 4 + cfg.simulations));
-      if ((dirty || now - lastPoll >= cfg.pollMs) && now - lastPoll >= interval) {
+      const priorityKey = 'priorityRpc:' + new Date(now).toISOString().slice(0, 10);
+      const spent = store.get(priorityKey, 0);
+      const priority = priorityDecision({
+        now,
+        lastAttempt: lastPriority,
+        pending: scanner.pending.length > 0,
+        remaining,
+        spent,
+        dailyCalls: cfg.dailyCalls,
+        simulations: cfg.simulations,
+      });
+      const interval = Math.max(
+        12000,
+        budgetDelay(now, remaining - Math.max(0, priority.reserve - spent), 4 + cfg.simulations),
+      );
+      if (priority.due) {
+        lastPriority = now;
+        const dayKey = 'rpc:' + new Date(now).toISOString().slice(0, 10);
+        const before = store.get(dayKey, 0);
+        try {
+          await scanner.scan({ recheckOnly: true });
+        } catch {
+          store.event('priority_error');
+        } finally {
+          store.set(priorityKey, spent + Math.max(0, store.get(dayKey, 0) - before));
+        }
+      } else if ((dirty || now - lastPoll >= cfg.pollMs) && now - lastPoll >= interval) {
         dirty = false;
         lastPoll = now;
         try {
@@ -329,11 +379,11 @@ export async function main() {
         }
       }
       try {
-        await scheduledReport(store, cfg);
+        if (Date.now() >= reportRetryAt) await scheduledReport(store, cfg);
       } catch {
         store.event('report_error');
         console.warn('Daily report delivery failed; will retry.');
-        await sleep(30000);
+        reportRetryAt = Date.now() + 30000;
       }
       const path = join(cfg.data, 'health.json');
       writeFileSync(path + '.tmp', JSON.stringify({ at: Date.now(), lastScan }));

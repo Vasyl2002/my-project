@@ -250,3 +250,30 @@ test('adaptive sizing shares quota, pins calls to one block and saves gas detail
     h.close();
   }
 });
+
+test('priority repeat skips pool reads and search, preserves observation cursor and clears checked signal', async () => {
+  const h = harness();
+  try {
+    await h.scanner.scan();
+    const previous = h.store.get('lastBlock');
+    h.next();
+    h.scanner.rpc.multi = async () => {
+      throw new Error('Priority must not read pools');
+    };
+    assert.equal(await h.scanner.scan({ recheckOnly: true }), true);
+    assert.deepEqual(h.store.get('lastBlock'), previous);
+    assert.equal(h.scanner.pending.length, 0);
+    assert.equal(
+      h.store.db
+        .prepare("SELECT count(*) AS n FROM simulation_results WHERE source='recheck'")
+        .get().n,
+      1,
+    );
+    assert.equal(
+      h.store.db.prepare("SELECT count(*) AS n FROM events WHERE kind='scan'").get().n,
+      1,
+    );
+  } finally {
+    h.close();
+  }
+});

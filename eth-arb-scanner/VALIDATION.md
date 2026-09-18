@@ -28,3 +28,7 @@ Validation: 31 local tests, including estimate/budget divergence, integer break-
 ## Linked recheck reporting
 
 All 33 local tests passed. Recheck records now retain the exact originating signal; the report distinguishes nonpositive results, positive results below threshold, and threshold success. Tests cover exact identity, prior-period origins, legacy records, invalidation, pending/error/expired states, and scanner metadata persistence. No live transactions or Telegram messages are sent by these tests.
+
+## 2026-09-18: canonical-history audit and priority rechecks
+
+Tests cover canonical common-ancestor recovery, RPC-unavailable quarantine, restart persistence, priority reserve gating and fast rechecks without pool reads or advancing the full-snapshot cursor. Existing RPC quota tests cover hard daily-limit enforcement. Full suite: 36 tests. No transaction or Telegram message was sent. A live next-block latency guarantee is not claimed.

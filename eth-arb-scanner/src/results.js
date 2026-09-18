@@ -13,7 +13,7 @@ export function resultLines(store, cfg, since, now) {
   const rows = store.db
     .prepare('SELECT valid,data FROM simulation_results WHERE ts>=? AND ts<? ORDER BY id')
     .all(since, now);
-  const valid = rows.filter((r) => r.valid).map((r) => JSON.parse(r.data));
+  const valid = rows.filter((r) => r.valid === 1).map((r) => JSON.parse(r.data));
   const lines = [
     '\nФактические результаты симуляций (сохраняются после обновления):',
     `Текущий порог сигнала: ${formatEther(cfg.minProfit)} WETH.`,
@@ -65,7 +65,12 @@ export function resultLines(store, cfg, since, now) {
       lines.push(gasLines(s));
     }
   }
-  const invalid = rows.length - valid.length;
+  const invalid = rows.filter((r) => r.valid === 0).length;
+  const pending = rows.filter((r) => r.valid === -1).length;
+  if (pending)
+    lines.push(
+      `Ожидают проверки каноничности: ${pending} результатов; в итогах пока не учитываются.`,
+    );
   if (invalid) lines.push(`Исключено после обнаружения смены хеша: ${invalid} результатов.`);
   return lines;
 }

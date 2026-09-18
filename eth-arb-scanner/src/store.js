@@ -12,6 +12,13 @@ export class Store {
  CREATE TABLE IF NOT EXISTS signals(id INTEGER PRIMARY KEY,ts INTEGER NOT NULL,block INTEGER NOT NULL,hash TEXT NOT NULL,route TEXT NOT NULL,input TEXT NOT NULL,net TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(hash,route,input));
  CREATE TABLE IF NOT EXISTS simulation_results(id INTEGER PRIMARY KEY,ts INTEGER NOT NULL,hash TEXT NOT NULL,route TEXT NOT NULL,input TEXT NOT NULL,source TEXT NOT NULL,valid INTEGER NOT NULL DEFAULT 1,data TEXT NOT NULL,UNIQUE(hash,route,input,source));
  CREATE INDEX IF NOT EXISTS simulation_results_time ON simulation_results(ts);`);
+    if (
+      !this.db
+        .prepare('PRAGMA table_info(signals)')
+        .all()
+        .some((c) => c.name === 'valid')
+    )
+      this.db.exec('ALTER TABLE signals ADD COLUMN valid INTEGER NOT NULL DEFAULT 1');
   }
   get(key, fallback = null) {
     const row = this.db.prepare('SELECT value FROM kv WHERE key=?').get(key);
